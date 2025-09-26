@@ -1,22 +1,16 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.26;
+pragma solidity ^0.8.20;
 
-import {IERC20} from "forge-std/interfaces/IERC20.sol";
+interface IERC20 {
+    function balanceOf(address) external view returns (uint256);
+}
 
-interface IWithdraw {
+interface IDestructible {
     function withdraw() external;
-    function withdraw(address) external;
-    function withdraw(uint256) external;
-    function withdrawAll() external;
-    function withdrawAll(address) external;
+    function withdraw(address asset) external;
 }
 
 contract ResponseProtocol {
-    address public lastCaller;
-    address public lastTarget;
-    address public lastAsset;
-    uint256 public lastAmount;
-
     event Rescued(
         address indexed caller,
         address indexed target,
@@ -24,37 +18,42 @@ contract ResponseProtocol {
         uint256 amount
     );
 
-    function rescue(address target, address asset) external {
-        lastCaller = msg.sender;
-        lastTarget = target;
-        lastAsset = asset;
+    address public owner;
+    mapping(address => bool) public operator;
+    bytes4 public constant EXPECTED_TAG = 0x53445231; // "SDR1"
+
+    modifier onlyAuth() {
+        require(
+            msg.sender == owner || operator[msg.sender],
+            "not authorized"
+        );
+        _;
+    }
+
+    constructor() {
+        owner = msg.sender;
+    }
+
+    function setOperator(address op, bool ok) external {
+        require(msg.sender == owner, "only owner");
+        operator[op] = ok;
+    }
+
+    receive() external payable {}
+
+    // Drosera should call execute(bytes), but if your wiring calls rescue(target,asset) directly,
+    // make sure only authorized callers can invoke it.
+    function rescue(address target, address asset) external onlyAuth {
+        uint256 amount = (asset == address(0))
+            ? target.balance
+            : IERC20(asset).balanceOf(target);
 
         if (asset == address(0)) {
-            // Rescue ETH
-            uint256 balance = target.balance;
-            if (balance > 0) {
-                try IWithdraw(target).withdrawAll() {} catch {
-                    try IWithdraw(target).withdraw() {} catch {
-                        // Fallback for ETH
-                    }
-                }
-                lastAmount = balance;
-            }
+            IDestructible(target).withdraw();
         } else {
-            // Rescue ERC20
-            uint256 balance = IERC20(asset).balanceOf(target);
-            if (balance > 0) {
-                try IWithdraw(target).withdrawAll(asset) {} catch {
-                    try IWithdraw(target).withdraw(asset) {} catch {
-                        try IWithdraw(target).withdraw(balance) {} catch {
-                            // Fallback for ERC20
-                        }
-                    }
-                }
-                lastAmount = balance;
-            }
+            IDestructible(target).withdraw(asset);
         }
 
-        emit Rescued(msg.sender, target, asset, lastAmount);
+        emit Rescued(msg.sender, target, asset, amount);
     }
 }

@@ -17,12 +17,12 @@ contract Destructible {
     receive() external payable {}
 
     function withdraw() external {
-        payable(owner).transfer(address(this).balance);
+        payable(msg.sender).transfer(address(this).balance);
     }
 
     function withdraw(address asset) external {
         if (asset != address(0)) {
-            IERC20(asset).transfer(owner, IERC20(asset).balanceOf(address(this)));
+            IERC20(asset).transfer(msg.sender, IERC20(asset).balanceOf(address(this)));
         }
     }
 

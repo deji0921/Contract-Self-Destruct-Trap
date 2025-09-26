@@ -22,6 +22,5 @@ whitelist = []
 
 [trap_probes.mainnet_probe]
 chain_id = 1 # Ethereum Mainnet
-# Placeholder address for a contract to monitor.
-# The owner must call addContract() on the deployed trap with this address.
-target_contracts = ["0x0000000000000000000000000000000000000000"]
+# The new design works with any target armed in the registry.
+target_contracts = []
