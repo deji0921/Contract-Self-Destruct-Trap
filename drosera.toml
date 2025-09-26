@@ -5,26 +5,23 @@ drosera_address = "0x91cB447BaFc6e0EA0F4Fe056F5a9b1F14bb06e5D"
 
 [traps]
 
-[traps.hello_world]
-path = "out/HelloWorldTrap.sol/HelloWorldTrap.json"
-response_contract = "0x183D78491555cb69B68d2354F7373cc2632508C7"
-response_function = "helloworld(string)"
-cooldown_period_blocks = 33
+[traps.self_destruct_trap]
+path = "out/SelfDestructTrap.sol/SelfDestructTrap.json"
+response_contract = "0x0000000000000000000000000000000000000000" # To be replaced with deployed ResponseProtocol address
+response_function = "rescue(address,address)"
+cooldown_period_blocks = 10
 min_number_of_operators = 1
 max_number_of_operators = 2
 block_sample_size = 10
 private_trap = true
 whitelist = []
 
-# Uncomment this to deploy the TransferEventTrap
+# Probes define which contracts the Drosera network will watch.
+# The trap logic then filters these events.
+[trap_probes]
 
-# [traps.transfer_event_trap]
-# path = "out/TransferEventTrap.sol/TransferEventTrap.json"
-# response_contract = "0x183D78491555cb69B68d2354F7373cc2632508C7"
-# response_function = "helloworld(string)"
-# cooldown_period_blocks = 33
-# min_number_of_operators = 1
-# max_number_of_operators = 2
-# block_sample_size = 10
-# private_trap = true
-# whitelist = []
+[trap_probes.mainnet_probe]
+chain_id = 1 # Ethereum Mainnet
+# Placeholder address for a contract to monitor.
+# The owner must call addContract() on the deployed trap with this address.
+target_contracts = ["0x0000000000000000000000000000000000000000"]

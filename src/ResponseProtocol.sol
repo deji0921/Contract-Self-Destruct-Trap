@@ -1,32 +1,60 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.12;
+pragma solidity 0.8.26;
+
+import {IERC20} from "forge-std/interfaces/IERC20.sol";
+
+interface IWithdraw {
+    function withdraw() external;
+    function withdraw(address) external;
+    function withdraw(uint256) external;
+    function withdrawAll() external;
+    function withdrawAll(address) external;
+}
 
 contract ResponseProtocol {
-    uint256 private balance;
-    uint256 public blockNumber;
+    address public lastCaller;
+    address public lastTarget;
+    address public lastAsset;
+    uint256 public lastAmount;
 
-    event ResponseCallback(uint256 blockNumber, address sender);
-    event HelloWorld(string text, address sender);
+    event Rescued(
+        address indexed caller,
+        address indexed target,
+        address indexed asset,
+        uint256 amount
+    );
 
-    constructor() {
-        balance = 9999;
-    }
+    function rescue(address target, address asset) external {
+        lastCaller = msg.sender;
+        lastTarget = target;
+        lastAsset = asset;
 
-    function getBalance() external view returns (uint256) {
-        return balance;
-    }
+        if (asset == address(0)) {
+            // Rescue ETH
+            uint256 balance = target.balance;
+            if (balance > 0) {
+                try IWithdraw(target).withdrawAll() {} catch {
+                    try IWithdraw(target).withdraw() {} catch {
+                        // Fallback for ETH
+                    }
+                }
+                lastAmount = balance;
+            }
+        } else {
+            // Rescue ERC20
+            uint256 balance = IERC20(asset).balanceOf(target);
+            if (balance > 0) {
+                try IWithdraw(target).withdrawAll(asset) {} catch {
+                    try IWithdraw(target).withdraw(asset) {} catch {
+                        try IWithdraw(target).withdraw(balance) {} catch {
+                            // Fallback for ERC20
+                        }
+                    }
+                }
+                lastAmount = balance;
+            }
+        }
 
-    function setBalance(uint256 _balance) external {
-        balance = _balance;
-    }
-
-    function responseCallback(uint256 _blockNumber) external {
-        blockNumber = _blockNumber;
-
-        emit ResponseCallback(_blockNumber, msg.sender);
-    }
-
-    function helloworld(string memory text) external{
-        emit HelloWorld(text, msg.sender);
+        emit Rescued(msg.sender, target, asset, lastAmount);
     }
 }

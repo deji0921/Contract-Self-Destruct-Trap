@@ -1,6 +1,6 @@
-# Drosera Trap Foundry Template
+# Drosera Self-Destruct Asset Rescue Trap
 
-This repo is for quickly bootstrapping a new Drosera project. It includes instructions for creating your first trap, deploying it to the Drosera network, and updating it on the fly.
+This repository contains a Drosera trap designed to rescue assets from a contract that is about to self-destruct. It demonstrates a powerful, reactive use case for the Drosera network, preventing asset loss rather than just reporting it.
 
 [![view - Documentation](https://img.shields.io/badge/view-Documentation-blue?style=for-the-badge)](https://dev.drosera.io "Project documentation")
 [![Twitter](https://img.shields.io/twitter/follow/DroseraNetwork?style=for-the-badge)](https://x.com/DroseraNetwork)
@@ -26,68 +26,39 @@ curl -L https://app.drosera.io/install | bash
 droseraup
 ```
 
-open the VScode preferences and Select `Soldity: Change workpace compiler version (Remote)`
-
-Select version `0.8.12`
+Open the VSCode preferences and select `Solidity: Change workspace compiler version (Remote)`. Select version `0.8.26`.
 
 ## Quick Start
 
-### Hello World Trap
+### Self-Destruct Asset Rescue Trap
 
-The drosera.toml file is configured to deploy a simple "Hello, World!" trap. Ensure the drosera.toml file is set to the following configuration:
+The `drosera.toml` file is configured to deploy the `SelfDestructTrap`. This trap monitors a target contract for a pending `selfdestruct` operation. If detected, it triggers a `ResponseProtocol` contract to rescue the assets (ETH or ERC20 tokens) from the target contract before it is destroyed.
 
-```toml
-response_contract = "0xdA890040Af0533D98B9F5f8FE3537720ABf83B0C"
-response_function = "helloworld(string)"
-```
+To deploy the trap, you first need to deploy the `ResponseProtocol.sol` contract to get its address.
 
-To deploy the trap, run the following commands:
+1.  **Deploy `ResponseProtocol.sol`:**
+    ```bash
+    forge script scripts/DeployResponseProtocol.s.sol --rpc-url <your_rpc_url> --private-key <your_private_key> --broadcast
+    ```
+    Take note of the deployed contract address.
 
-```bash
-# Compile the Trap
-forge build
+2.  **Update `drosera.toml`:**
+    Replace the placeholder `response_contract` address with the address of your deployed `ResponseProtocol` contract.
 
-# Deploy the Trap
-DROSERA_PRIVATE_KEY=0x.. drosera apply
-```
+3.  **Deploy the Trap:**
+    ```bash
+    # Compile the Trap
+    forge build
 
-After successfully deploying the trap, the CLI will add an `address` field to the `drosera.toml` file.
+    # Deploy the Trap
+    DROSERA_PRIVATE_KEY=0x.. drosera apply
+    ```
 
-Congratulations! You have successfully deployed your first trap!
-
-### Response Trap
-
-You can then update the trap by changing its logic and recompling it or changing the path field in the `drosera.toml` file to point to the Response Trap.
-
-The Response Trap is designed to trigger a response at a specific block number. To test the Response Trap, pick a future block number and update the Response Trap.
-Specify a response contract address and function signature in the drosera.toml file to the following:
-
-```toml
-response_contract = "0x183D78491555cb69B68d2354F7373cc2632508C7"
-response_function = "responseCallback(uint256)"
-```
-
-Finally, deploy the Response Trap by running the following commands:
-
-```bash
-# Compile the Trap
-forge build
-
-# Deploy the Trap
-DROSERA_PRIVATE_KEY=0x.. drosera apply
-```
-
-> Note: The `DROSERA_PRIVATE_KEY` environment variable can be used to deploy traps. You can also set it in the drosera.toml file as `private_key = "0x.."`.
-
-
-### Transfer Event Trap
-The TransferEventTrap is an example of how a Trap can parse event logs from a block and respond to a specific ERC-20 token transfer events.
-
-To deploy the Transfer Event Trap, uncomment the `transfer_event_trap` section in the `drosera.toml` file. Add the token address to the `tokenAddress` constant in the `TransferEventTrap.sol` file and then deploy the trap.
+After successfully deploying the trap, the CLI will add an `address` field to the `drosera.toml` file for the `self_destruct_trap`.
 
 ## Testing
 
-Example tests are included in the `tests` directory. They simulate how Drosera Operators execute traps and determine if a response should be triggered. To run the tests, execute the following command:
+Example tests are included in the `test` directory. They simulate how Drosera Operators execute traps and trigger the asset rescue mechanism. To run the tests, execute the following command:
 
 ```bash
 forge test
