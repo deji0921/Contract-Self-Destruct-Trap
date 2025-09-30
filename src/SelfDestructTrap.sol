@@ -1,40 +1,44 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.26;
 
-interface ITrap {
-    function collect() external view returns (bytes memory);
-    function shouldRespond(bytes[] calldata data) external pure returns (bool, bytes memory);
-}
-interface ISelfDestructRegistry { function armedAsset(address) external view returns (address); }
+import {ITrap} from "./interfaces/ITrap.sol";
+import {ISdRegistry} from "./interfaces/ISdRegistry.sol";
 
 contract SelfDestructTrap is ITrap {
-    // Hardcode or read from a config contract (no constructor args in Drosera)
-    address public REGISTRY;
-    address public TARGET;
+    ISdRegistry public immutable REGISTRY;
 
-    bytes4  public constant TAG = 0x53445231; // "SDR1"
-
-    struct Sample { uint256 blockNumber; address target; address asset; bool armed; }
-
-    function setAddresses(address registry, address target) external {
+    constructor(ISdRegistry registry) {
         REGISTRY = registry;
-        TARGET = target;
     }
 
-    function collect() external view returns (bytes memory) {
-        address asset = ISelfDestructRegistry(REGISTRY).armedAsset(TARGET);
-        bool armed = (asset != address(0));
-        return abi.encode(Sample({ blockNumber: block.number, target: TARGET, asset: asset, armed: armed }));
+    function collect() external pure override returns (bytes memory) {
+        // As per the feedback, this is kept minimal.
+        // The off-chain detector prepares the data for shouldRespond.
+        return abi.encode();
     }
 
-    // data[0] = newest
-    function shouldRespond(bytes[] calldata data) external pure returns (bool, bytes memory) {
-        if (data.length == 0) return (false, "");
-        Sample memory s = abi.decode(data[0], (Sample));
-        if (s.armed) {
-            // payload: TAG || abi.encode(target, asset) to match response_function
-            return (true, abi.encodePacked(TAG, abi.encode(s.target, s.asset)));
+    function shouldRespond(bytes[] calldata data)
+        external
+        pure
+        override
+        returns (bool, bytes memory)
+    {
+        if (data.length == 0 || data[0].length == 0) {
+            return (false, "");
         }
-        return (false, "");
+
+        // The data is prepared by the off-chain detector.
+        (address target, address asset, bool armed, uint64 expiry) =
+            abi.decode(data[0], (address, address, bool, uint64));
+
+        if (!armed) {
+            return (false, "");
+        }
+
+        // Expiry check is not possible in a pure function without access to block.timestamp.
+        // The feedback mentions this is optional and can be handled by the detector or responder.
+        // if (expiry != 0 && block.timestamp > expiry) return (false, "");
+
+        return (true, abi.encode(target, asset, bytes32("ARMED_SELFDESTRUCT")));
     }
 }

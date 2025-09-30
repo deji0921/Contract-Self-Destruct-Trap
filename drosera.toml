@@ -8,7 +8,7 @@ drosera_address = "0x91cB447BaFc6e0EA0F4Fe056F5a9b1F14bb06e5D"
 [traps.self_destruct_trap]
 path = "out/SelfDestructTrap.sol/SelfDestructTrap.json"
 response_contract = "0x0000000000000000000000000000000000000000" # To be replaced with deployed ResponseProtocol address
-response_function = "rescue(address,address)"
+response_function = "rescue(bytes)"
 cooldown_period_blocks = 10
 min_number_of_operators = 1
 max_number_of_operators = 2

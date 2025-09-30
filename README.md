@@ -1,9 +1,20 @@
 # Drosera Self-Destruct Asset Rescue Trap
 
-This repository contains a Drosera trap designed to rescue assets from a contract that is about to self-destruct. It demonstrates a powerful, reactive use case for the Drosera network, preventing asset loss rather than just reporting it.
+This repository contains a Drosera trap designed to rescue assets from a contract that is about to self-destruct. It follows Drosera's recommended architecture for stateless traps, separating responsibilities between an off-chain detector, an on-chain registry, a stateless trap, and a response protocol.
 
 [![view - Documentation](https://img.shields.io/badge/view-Documentation-blue?style=for-the-badge)](https://dev.drosera.io "Project documentation")
 [![Twitter](https://img.shields.io/twitter/follow/DroseraNetwork?style=for-the-badge)](https://x.com/DroseraNetwork)
+
+## Architecture Overview
+
+The system is composed of four main components:
+
+1.  **Off-Chain Detector (Operator's responsibility):** This component is responsible for monitoring the mempool for transactions that will lead to a contract self-destructing. When it detects such a transaction, it calls the `arm` function on the `SelfDestructRegistry` to mark the target contract as "armed".
+2.  **`SelfDestructRegistry.sol`:** A simple on-chain registry that stores a list of contracts that are about to self-destruct. The off-chain detector writes to this registry.
+3.  **`SelfDestructTrap.sol`:** A stateless Drosera trap.
+    *   `collect()`: This function is designed to be extremely cheap, returning an empty `bytes` array.
+    *   `shouldRespond()`: This `pure` function is called by Drosera operators. The data about armed targets is provided by the operators' off-chain detectors. It decodes the data and, if a target is armed, returns a payload for the `ResponseProtocol`.
+4.  **`ResponseProtocol.sol`:** This contract receives the payload from the trap and executes the rescue logic. It calls a pre-configured `EmergencyController` contract to perform actions like pausing the target contract or withdrawing assets. Authorization is handled by the Drosera network, which ensures only whitelisted operators can successfully call the `rescue` function.
 
 ## Configure dev environment
 
@@ -28,37 +39,51 @@ droseraup
 
 Open the VSCode preferences and select `Solidity: Change workspace compiler version (Remote)`. Select version `0.8.26`.
 
-## Quick Start
+## Deployment and Configuration
 
-### Self-Destruct Asset Rescue Trap
+The deployment process involves several steps:
 
-The `drosera.toml` file is configured to deploy the `SelfDestructTrap`. This trap monitors a target contract for a pending `selfdestruct` operation. If detected, it triggers a `ResponseProtocol` contract to rescue the assets (ETH or ERC20 tokens) from the target contract before it is destroyed.
-
-To deploy the trap, you first need to deploy the `ResponseProtocol.sol` contract to get its address.
-
-1.  **Deploy `ResponseProtocol.sol`:**
+1.  **Deploy `SelfDestructRegistry.sol`:**
     ```bash
-    forge script scripts/DeployResponseProtocol.s.sol --rpc-url <your_rpc_url> --private-key <your_private_key> --broadcast
+    forge create src/SelfDestructRegistry.sol:SelfDestructRegistry --rpc-url <your_rpc_url> --private-key <your_private_key>
     ```
-    Take note of the deployed contract address.
+    Take note of the deployed registry address.
 
-2.  **Update `drosera.toml`:**
-    Replace the placeholder `response_contract` address with the address of your deployed `ResponseProtocol` contract.
+2.  **Deploy an Emergency Controller:**
+    You need a controller contract that can pause or withdraw funds from your target contracts. A mock is provided (`test/SelfDestructTrap.t.sol:MockEmergencyController`), but for a real scenario, you would deploy your own.
+    ```bash
+    # Example deploying the mock
+    forge create test/SelfDestructTrap.t.sol:MockEmergencyController --rpc-url <your_rpc_url> --private-key <your_private_key>
+    ```
+    Take note of the deployed controller address.
 
-3.  **Deploy the Trap:**
+3.  **Deploy `ResponseProtocol.sol`:**
+    Deploy the responder, passing the controller's address to the constructor.
+    ```bash
+    forge create src/ResponseProtocol.sol:ResponseProtocol --rpc-url <your_rpc_url> --private-key <your_private_key> --constructor-args <controller_address>
+    ```
+    Take note of the deployed responder address.
+
+4.  **Update `drosera.toml`:**
+    *   Replace the placeholder `response_contract` address with the address of your deployed `ResponseProtocol`.
+    *   Update `response_function` to `"rescue(bytes)"`.
+
+5.  **Deploy the Trap:**
+    The `SelfDestructTrap` constructor requires the address of the `SelfDestructRegistry`. This must be passed during the Drosera deployment process.
     ```bash
     # Compile the Trap
     forge build
 
     # Deploy the Trap
-    DROSERA_PRIVATE_KEY=0x.. drosera apply
+    DROSERA_PRIVATE_KEY=0x... drosera apply --constructor-args <registry_address>
     ```
 
-After successfully deploying the trap, the CLI will add an `address` field to the `drosera.toml` file for the `self_destruct_trap`.
+6.  **Configure Off-Chain Detector:**
+    Your off-chain detector needs the address of the `SelfDestructRegistry` and a private key to call the `arm` and `disarm` functions.
 
 ## Testing
 
-Example tests are included in the `test` directory. They simulate how Drosera Operators execute traps and trigger the asset rescue mechanism. To run the tests, execute the following command:
+Example tests are included in the `test` directory. They simulate the full workflow from arming a target in the registry to the responder executing the rescue. To run the tests, execute the following command:
 
 ```bash
 forge test
