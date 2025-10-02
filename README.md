@@ -2,8 +2,8 @@
 
 This repository contains a Drosera trap designed to rescue assets from a contract that is about to self-destruct. It follows Drosera's recommended architecture for stateless traps, separating responsibilities between an off-chain detector, an on-chain registry, a stateless trap, and a response protocol.
 
-[![view - Documentation](https://img.shields.io/badge/view-Documentation-blue?style=for-the-badge)](https://dev.drosera.io "Project documentation")
-[![Twitter](https://img.shields.io/twitter/follow/DroseraNetwork?style=for-the-badge)](https://x.com/DroseraNetwork)
+[![view - Documentation](https://img.shields.io/badge/view-Documentation-blue?style-for-the-badge)](https://dev.drosera.io "Project documentation")
+[![Twitter](https://img.shields.io/twitter/follow/DroseraNetwork?style-for-the-badge)](https://x.com/DroseraNetwork)
 
 ## Architecture Overview
 
@@ -13,8 +13,8 @@ The system is composed of four main components:
 2.  **`SelfDestructRegistry.sol`:** A simple on-chain registry that stores a list of contracts that are about to self-destruct. The off-chain detector writes to this registry.
 3.  **`SelfDestructTrap.sol`:** A stateless Drosera trap.
     *   `collect()`: This function is designed to be extremely cheap, returning an empty `bytes` array.
-    *   `shouldRespond()`: This `pure` function is called by Drosera operators. The data about armed targets is provided by the operators' off-chain detectors. It decodes the data and, if a target is armed, returns a payload for the `ResponseProtocol`.
-4.  **`ResponseProtocol.sol`:** This contract receives the payload from the trap and executes the rescue logic. It calls a pre-configured `EmergencyController` contract to perform actions like pausing the target contract or withdrawing assets. Authorization is handled by the Drosera network, which ensures only whitelisted operators can successfully call the `rescue` function.
+    *   `shouldRespond()`: This `view` function is called by Drosera operators. The data about armed targets is provided by the operators' off-chain detectors. It decodes the data and, if a target is armed, performs a crucial on-chain check (`target.code.length > 0`) to ensure the contract has not already been destroyed before returning a payload for the `ResponseProtocol`.
+4.  **`ResponseProtocol.sol`:** This contract receives the payload from the trap and executes the rescue logic. It calls a pre-configured `EmergencyController` contract to perform actions like pausing the target contract or withdrawing assets. Authorization is handled by an `onlyDrosera` modifier, ensuring only a trusted Drosera relay contract can trigger the rescue. The contract also includes robust error handling to catch and log failed rescue attempts.
 
 ## Configure dev environment
 
@@ -58,15 +58,15 @@ The deployment process involves several steps:
     Take note of the deployed controller address.
 
 3.  **Deploy `ResponseProtocol.sol`:**
-    Deploy the responder, passing the controller's address to the constructor.
+    Deploy the responder, passing the controller's address and the Drosera relay address to the constructor.
     ```bash
-    forge create src/ResponseProtocol.sol:ResponseProtocol --rpc-url <your_rpc_url> --private-key <your_private_key> --constructor-args <controller_address>
+    forge create src/ResponseProtocol.sol:ResponseProtocol --rpc-url <your_rpc_url> --private-key <your_private_key> --constructor-args <controller_address> <drosera_relay_address>
     ```
     Take note of the deployed responder address.
 
 4.  **Update `drosera.toml`:**
     *   Replace the placeholder `response_contract` address with the address of your deployed `ResponseProtocol`.
-    *   Update `response_function` to `"rescue(bytes)"`.
+    *   Ensure `response_function` is set to `"rescue(bytes)"`.
 
 5.  **Deploy the Trap:**
     The `SelfDestructTrap` constructor requires the address of the `SelfDestructRegistry`. This must be passed during the Drosera deployment process.

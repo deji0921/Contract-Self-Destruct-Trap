@@ -19,7 +19,7 @@ contract SelfDestructTrap is ITrap {
 
     function shouldRespond(bytes[] calldata data)
         external
-        pure
+        view
         override
         returns (bool, bytes memory)
     {
@@ -32,6 +32,12 @@ contract SelfDestructTrap is ITrap {
             abi.decode(data[0], (address, address, bool, uint64));
 
         if (!armed) {
+            return (false, "");
+        }
+
+        // This is an on-chain check to ensure the contract has not already been destructed.
+        // It prevents responding to an event that has already completed.
+        if (target.code.length == 0) {
             return (false, "");
         }
 
